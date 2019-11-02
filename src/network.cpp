@@ -43,6 +43,16 @@ bool Network::add_link(const size_t &a, const size_t &b, double str) {
     return true;
 }
 
+std::pair<size_t, double> Network::degree(const size_t& i) const{
+	std::vector<std::pair<size_t, double>> neighbors_(neighbors(i));
+	double sum_intens(0);
+	
+	for(auto& neighbor : neighbors_){
+		sum_intens += neighbor.second;
+	}
+	return std::make_pair(neighbors_.size(),sum_intens);
+}
+
 size_t Network::random_connect(const double &mean_deg, const double &mean_streng) {
     links.clear();
     std::vector<int> degrees(size());
@@ -62,6 +72,14 @@ size_t Network::random_connect(const double &mean_deg, const double &mean_streng
     return num_links;
 }
 
+std::vector<std::pair<size_t, double> > Network::neighbors(const size_t& i) const{
+	std::vector<std::pair<size_t, double>> vec;
+	for(std::map<std::pair<size_t, size_t>,double>::const_iterator I=links.lower_bound({i,0}); (I!=links.end()) and (I->first.first==i) ; ++I){  
+			vec.push_back(std::make_pair(I->first.second,I->second));
+	}
+	return vec;
+}
+
 std::vector<double> Network::potentials() const {
     std::vector<double> vals;
     for (size_t nn=0; nn<size(); nn++)
@@ -75,6 +93,56 @@ std::vector<double> Network::recoveries() const {
         vals.push_back(neurons[nn].recovery());
     return vals;
 }
+
+std::set<size_t> Network::step(const std::vector<double>& vec){
+	
+	std::set<size_t> firing_index;
+	double w(0.0);
+	double input_(0.0);
+	double sum_inhib(0.0);
+	double sum_excit(0.0);
+	
+	
+	for(size_t j(0); j<size(); ++j){
+		
+			if (neuron(j).firing()){
+				firing_index.insert(j);
+				neurons[j].reset();
+			}
+		}
+		
+	for (size_t i(0); i<size(); ++i){
+		
+		sum_inhib = 0.0;
+		sum_excit = 0.0;
+		
+		std::vector<std::pair<size_t, double>> neighbors_(neighbors(i));
+		
+		if (neurons[i].is_inhibitory()){
+			w = 0.4;
+		}else{
+			w = 1.0;
+		}
+		
+		for (auto& neighbor : neighbors_){
+			
+			if (firing_index.count(neighbor.first)){
+				if(neurons[neighbor.first].is_inhibitory()){
+					sum_inhib += neighbor.second;
+				}else{
+					sum_excit += neighbor.second;
+				} 
+			}
+		}
+		
+		input_ = w * vec[i] + 0.5 * sum_excit + sum_inhib;
+		neurons[i].input(input_);
+		
+		neurons[i].step();
+	}
+	return firing_index;	
+}
+
 
 void Network::print_params(std::ostream *_out) {
     (*_out) << "Type\ta\tb\tc\td\tInhibitory\tdegree\tvalence" << std::endl;
